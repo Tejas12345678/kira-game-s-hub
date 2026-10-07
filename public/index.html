@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>KIRA Game's hub — Find the word, if you dare</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">KIRA Game's <span>hub</span></div>
+    <div class="tag">FIND THE WORD, IF YOU DARE</div>
+  </header>
+
+  <!-- HOME SCREEN -->
+  <section id="home" class="panel">
+    <h1>Find the word, <span>if you dare.</span></h1>
+    <p>Create a room, gather 4+ players, let the system randomly choose the MC, and race to solve the secret word.</p>
+    
+    <div class="grid">
+      <div class="box">
+        <h3>Create room</h3>
+        <input id="createName" placeholder="Your player name" maxlength="24">
+        <input id="roomName" placeholder="Room name" maxlength="32">
+        <select id="visibility" onchange="togglePasswordVisibility()">
+          <option value="private">Private room (password required)</option>
+          <option value="public">Public room (no password)</option>
+        </select>
+        <input id="roomPass" type="password" placeholder="Room password (required for private)">
+        <button id="createBtn" onclick="createRoom()">Create Room</button>
+      </div>
+
+      <div class="box">
+        <h3>Join room</h3>
+        <input id="joinName" placeholder="Your player name" maxlength="24">
+        <input id="joinCode" placeholder="Room name or code" maxlength="32">
+        <input id="joinPass" type="password" placeholder="Password (if private)">
+        <button id="joinBtn" onclick="joinRoom()">Join Room</button>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="pub-header">
+        <h3>Public rooms</h3>
+        <button class="btn-sm" onclick="refreshPublicRooms()">Refresh</button>
+      </div>
+      <div id="publicRooms">No public rooms yet.</div>
+    </div>
+  </section>
+
+  <!-- IN-ROOM SCREEN -->
+  <section id="room" class="panel hidden">
+    <div class="top">
+      <div>
+        <h2 id="roomTitle"></h2>
+        <span id="roleBadge" class="pill"></span>
+        <span id="connBadge" class="pill pill-green">CONNECTED</span>
+      </div>
+      <div class="room-actions">
+        <div id="phaseBadge" class="pill"></div>
+        <button class="btn-sm btn-muted" onclick="leaveRoom()">Leave</button>
+      </div>
+    </div>
+
+    <p id="roomHint" class="hint-text"></p>
+
+    <!-- PLAYERS LIST -->
+    <div class="players-title">Players in room:</div>
+    <div class="players" id="players"></div>
+
+    <!-- CREATOR CONTROLS (Lobby only) -->
+    <div id="creatorControls" class="box hidden">
+      <h3>Host controls</h3>
+      <p class="muted">The game requires at least 4 players. When you start, the server will randomly select one player as the MC.</p>
+      <button id="startBtn" onclick="startGame()">Start game</button>
+    </div>
+
+    <!-- MC CONTROLS (Waiting phase only) -->
+    <div id="mcControls" class="box hidden">
+      <h3>MC round setup</h3>
+      <p class="muted">You are the MC! Enter a secret word, a helpful clue, and set the round timer.</p>
+      <input id="secret" placeholder="Secret word (hidden from normal players)" maxlength="80">
+      <textarea id="clue" placeholder="Clue / description (e.g. It is red and grows on trees)" maxlength="240"></textarea>
+      <div class="timer-input-wrap">
+        <label for="seconds">Round duration (seconds):</label>
+        <input id="seconds" type="number" value="60" min="15" max="300">
+      </div>
+      <button id="mcStartBtn" onclick="startRound()">Start round</button>
+    </div>
+
+    <!-- ACTIVE GAME AREA (Persistent Input) -->
+    <div id="gameArea" class="box hidden">
+      <div class="timer-wrap">
+        <div class="timer-label" id="timerLabel">TIME REMAINING</div>
+        <div class="timer" id="timer">00:00</div>
+      </div>
+
+      <!-- Secret banner (only visible to MC, Spectators, or post-game) -->
+      <div id="secretBanner" class="secret-box hidden">
+        <span class="muted">SECRET WORD:</span> <b id="secretWordDisplay"></b>
+      </div>
+
+      <div class="clue-card">
+        <div class="clue-tag">CLUE</div>
+        <div id="clueText" class="clue-body"></div>
+      </div>
+
+      <!-- MC Live Hint Panel (Allows MC to provide additional hints during/between rounds) -->
+      <div id="mcLivePanel" class="box hidden" style="margin-bottom:14px;background:#151c33;">
+        <span class="muted" style="font-size:12px;font-weight:700;">MC CONTROLS:</span>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <input id="updateClueInput" placeholder="Update clue / add a hint for solvers..." maxlength="240">
+          <button class="btn-sm" onclick="updateClue()">Update Clue</button>
+        </div>
+        <button id="skipRevealBtn" class="btn-sm btn-muted hidden" style="margin-top:8px;" onclick="skipReveal()">Start Next Round Now</button>
+      </div>
+
+      <!-- GUESS AREA (DOM Persistent - Never destroyed on timer tick) -->
+      <div id="guessContainer" class="guess-container">
+        <form id="guessForm" class="guess" onsubmit="submitGuess(event)">
+          <input id="guessInput" placeholder="Type your guess here..." autocomplete="off" maxlength="80">
+          <button id="guessBtn" type="submit">Lock guess</button>
+        </form>
+        <div id="guessStatus" class="guess-status hidden"></div>
+      </div>
+
+      <h3>Live Guess Activity</h3>
+      <div id="guessFeed" class="guess-feed"></div>
+    </div>
+
+    <!-- REVEAL / 60S INTERMISSION AREA -->
+    <div id="revealArea" class="box hidden">
+      <h2>Round Gap (Clue Intermission)</h2>
+      <div id="revealText"></div>
+
+      <!-- MC 60s Clue Intermission Box -->
+      <div id="mcGapBox" class="box hidden" style="background:#151c33;border:1px solid #7658ff;margin-top:12px;">
+        <h3 style="color:#aa94ff;margin-top:0;">MC: Enter Another Clue</h3>
+        <p class="muted">You have 60 seconds to provide another clue before the next round counter begins automatically.</p>
+        <textarea id="gapClueInput" placeholder="Enter additional clue / hint for remaining solvers..."></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button onclick="submitGapClue()">Save Clue</button>
+          <button class="btn-secondary" onclick="submitGapClueAndStart()">Save & Start Round Now</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FINISHED / GAME OVER AREA -->
+    <div id="finishedArea" class="box hidden">
+      <h2>Game Complete! 🎉</h2>
+      <p>Every non-MC player has successfully solved the word!</p>
+      <div id="finalScoreboard" class="final-scoreboard"></div>
+      <div id="finishedCreatorActions" class="hidden">
+        <button onclick="resetGame()">Play Again (Back to Lobby)</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

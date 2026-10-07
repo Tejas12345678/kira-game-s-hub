@@ -1,0 +1,16 @@
+{
+  "name": "kira-games-hub",
+  "version": "2.0.0",
+  "private": true,
+  "description": "KIRA Game's hub - Find the word, if you dare",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^13.0.3",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
